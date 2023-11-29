@@ -230,9 +230,16 @@ async function run() {
   
   })
 
-  app.get('/checkOut', async(req,res) => {
-    const result = await checkOutCollection.find().toArray();
-    res.send(result)
+//   app.get('/checkOut', async(req,res) => {
+//     const result = await checkOutCollection.find().toArray();
+//     res.send(result)
+// })
+
+app.get('/checkOut/:email', async(req,res) => {
+  const email = req.params.email;
+const query = {userEmail:email}
+  const result = await checkOutCollection.find(query).toArray();
+  res.send(result)
 })
 
 
@@ -243,7 +250,7 @@ async function run() {
   //     res.send(result)
   // })
 
-  app.delete('/sales/:id', async(req,res) =>{
+  app.delete('/checkOut/:id', async(req,res) =>{
     const id = req.params.id;
     const query = {_id: new ObjectId(id)}
     const result = await saleCollection.deleteOne(query)
@@ -253,8 +260,23 @@ async function run() {
 
   app.post('/sales', async(req, res)=>{
     const salesProduct = req.body
-    console.log("salesProduct", salesProduct)
+    // const query = {productId: (salesProduct.id)}
+    const query = {_id:new ObjectId(salesProduct.id)}
+    console.log(query)
+    const productId = {_id:new ObjectId(salesProduct.productId)}
     const result = await saleCollection.insertOne(salesProduct)
+    const findId = await checkOutCollection.deleteOne(query)
+    console.log(findId)
+    const options = {
+      upsert:true
+    }
+    const updateDoc = {
+      $inc:{
+        saleCount: 1,
+        quantity: -1
+      }
+    }
+    const updateProduct = await productsCollection.updateOne(productId, updateDoc, options)
     res.send(result)
 })
 
