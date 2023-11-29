@@ -1,10 +1,12 @@
 const express = require('express')
+require('dotenv').config()
 const app = express();
 const cors = require('cors');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KYE); 
 const port = process.env.PORT || 5000;
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
-require('dotenv').config()
+
 
 const { MongoClient,ObjectId, ServerApiVersion } = require('mongodb');
 
@@ -43,6 +45,39 @@ async function run() {
     const productsCollection = client.db("inventoryMS").collection("products")
     const checkOutCollection = client.db("inventoryMS").collection("checkOut")
     const saleCollection = client.db("inventoryMS").collection("sales")
+    const paymentCollection = client.db("inventoryMS").collection("payment")
+
+
+
+    app.post('/payment',async(req,res)=>{
+      const id=req.body 
+      const paymentResult =await paymentCollection.insertOne(id)
+     res.send(paymentResult)
+    })
+
+    app.post("/create-payment-intent", async (req, res) => {
+      const { price } = req.body;
+      console.log(price)
+      const amount = parseInt(price * 100);
+      const paymentIntent = await stripe?.paymentIntents.create({
+        amount: amount,
+        currency: "usd",
+        payment_method_types: ["card"],
+      });
+     console.log(paymentIntent.client_secret)
+      res.send({
+       clientSecret: paymentIntent?.client_secret,
+      });
+    })
+
+    app.get('/create-payment-intent/:id', async(req,res) => {
+      const id = req.params.id
+      console.log(id)
+      const query = { _id: new ObjectId(id) }
+      const result = await checkOutCollection.findOne(query);
+      res.send(result) 
+  })
+
 
 
     const verifyToken = async(req,res,next) => {
@@ -129,7 +164,7 @@ async function run() {
   });
 
 
-  app.patch('/products/:id', async(req,res) =>{
+  app.patch('/products/:id',verifyToken,  async(req,res) =>{
     const quantity = req.body.quantity;
     const count = req.body.quantity;
     const id = req.params.id;
@@ -147,7 +182,7 @@ async function run() {
     res.send(result);
   })
 
-  app.delete('/products/:id', async(req,res) =>{
+  app.delete('/products/:id',verifyToken,  async(req,res) =>{
     const id = req.params.id;
     const query = {_id: new ObjectId(id)}
     const result = await productsCollection.deleteOne(query)
@@ -167,12 +202,12 @@ async function run() {
         res.send(result)
       })
 
-      app.get('/users', async(req,res) => {
+      app.get('/users',verifyToken, async(req,res) => {
         const result = await usersCollection.find().toArray();
         res.send(result) 
     })
 
-      app.patch('/users/:email', async(req,res) =>{
+      app.patch('/users/:email',verifyToken, async(req,res) =>{
         const email = req.params.email;
         const shopManager = req.body;
         const query = {email: email};
@@ -189,7 +224,7 @@ async function run() {
         res.send(result)
       })
 
-      app.patch('/users/admin/:id', async(req,res) =>{
+      app.patch('/users/admin/:id', verifyToken, async(req,res) =>{
         const id = req.params.id;
         const shopManager = req.body;
         const filter = {_id : new ObjectId(id)};
@@ -216,7 +251,7 @@ async function run() {
         res.send(result)
       })
 
-      app.get('/shop', async(req,res) => {
+      app.get('/shop', verifyToken, async(req,res) => {
         const result = await shopCollection.find().toArray();
         res.send(result) 
     })
@@ -230,12 +265,9 @@ async function run() {
   
   })
 
-//   app.get('/checkOut', async(req,res) => {
-//     const result = await checkOutCollection.find().toArray();
-//     res.send(result)
-// })
 
-app.get('/checkOut/:email', async(req,res) => {
+
+app.get('/checkOut/:email',verifyToken,  async(req,res) => {
   const email = req.params.email;
 const query = {userEmail:email}
   const result = await checkOutCollection.find(query).toArray();
@@ -243,14 +275,7 @@ const query = {userEmail:email}
 })
 
 
-  //   app.delete('/sold-product-delete/:id', async(req, res)=>{
-  //     const id = req.params.id
-  //     const query = { _id: new ObjectId(id) }
-  //     const result = await checkOutCollection.deleteOne(query)
-  //     res.send(result)
-  // })
-
-  app.delete('/checkOut/:id', async(req,res) =>{
+  app.delete('/checkOut/:id',verifyToken,  async(req,res) =>{
     const id = req.params.id;
     const query = {_id: new ObjectId(id)}
     const result = await saleCollection.deleteOne(query)
@@ -258,7 +283,7 @@ const query = {userEmail:email}
   })
 
 
-  app.post('/sales', async(req, res)=>{
+  app.post('/sales',verifyToken,  async(req, res)=>{
     const salesProduct = req.body
     // const query = {productId: (salesProduct.id)}
     const query = {_id:new ObjectId(salesProduct.id)}
@@ -282,18 +307,15 @@ const query = {userEmail:email}
 
 
 
-
-
-
-    
-
-  app.get('/sales', async(req,res) => {
-    const result = await saleCollection.find().toArray();
+  app.get('/sales/:email',verifyToken,  async(req,res) => {
+    const email = req.params.email;
+    const query = {userEmail:email}
+    const result = await saleCollection.find(query).toArray();
     res.send(result)
 })
 
 
-app.patch('/products/:id', async(req, res)=>{
+app.patch('/products/:id',verifyToken,  async(req, res)=>{
   const id = req.params.id
   const data = req.body
   const query = { _id: new ObjectId(id) }
